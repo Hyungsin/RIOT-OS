@@ -63,6 +63,7 @@ typedef struct {
     uint8_t addr;             /**< I2C address of this particular sensor */
     uint8_t acc_range;        /**< Accelerator full-scale range */
     uint32_t renew_interval;  /**< Interval for cache renewal */
+    bool use_acc_raw_value;   /**< Whether to use raw accel reading */
 } fxos8700_params_t;
 
 /**
