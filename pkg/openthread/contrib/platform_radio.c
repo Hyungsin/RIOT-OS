@@ -23,6 +23,7 @@
 #include "byteorder.h"
 #include "errno.h"
 #include "irq.h"
+#include "random.h"
 #include "net/ethernet/hdr.h"
 #include "net/ethertype.h"
 #include "net/ieee802154.h"
@@ -40,6 +41,12 @@
 #define RADIO_IEEE802154_FCS_LEN    (2U)
 #define IEEE802154_ACK_LENGTH (5)
 #define IEEE802154_DSN_OFFSET (2)
+
+#ifdef OPENTHREAD_CONFIG_LINK_RETRY_DELAY
+static bool retry_delay_timer_ongoing = false;
+static xtimer_t link_retry_timer;
+static msg_t link_retry_msg;
+#endif
 
 static otRadioFrame sTransmitFrame;
 static otRadioFrame sReceiveFrame;
@@ -477,6 +484,17 @@ void sent_pkt(otInstance *aInstance, netdev_event_t event)
             break;
         case NETDEV_EVENT_TX_NOACK:
             DEBUG("TX_NOACK\n");
+#ifdef OPENTHREAD_CONFIG_LINK_RETRY_DELAY
+            if (!retry_delay_timer_ongoing) {
+                retry_delay_timer_ongoing = true;
+                link_retry_msg.type = OPENTHREAD_LINK_RETRY_TIMEOUT;
+                link_retry_msg.content.value = 0;
+                uint32_t link_delay = random_uint32_range(0, OPENTHREAD_CONFIG_LINK_RETRY_DELAY);
+                xtimer_set_msg(&link_retry_timer, link_delay, &link_retry_msg, openthread_get_event_pid());
+                break;
+            }
+            retry_delay_timer_ongoing = false;
+#endif
             otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL, OT_ERROR_NO_ACK);
             break;
         case NETDEV_EVENT_TX_MEDIUM_BUSY:

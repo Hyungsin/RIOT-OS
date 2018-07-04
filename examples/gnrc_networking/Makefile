@@ -5,7 +5,7 @@ APPLICATION = gnrc_networking
 BOARD ?= native
 
 # This has to be the absolute path to the RIOT base directory:
-RIOTBASE ?= $(CURDIR)/../..
+RIOTBASE = $(CURDIR)/../..
 
 BOARD_INSUFFICIENT_MEMORY := calliope-mini chronos microbit msb-430 msb-430h \
                              nucleo32-f031 nucleo32-f042 nucleo32-f303 nucleo32-l031 \
@@ -39,6 +39,8 @@ USEMODULE += netstats_rpl
 # which is not needed in a production environment but helps in the
 # development process:
 CFLAGS += -DDEVELHELP
+
+CFLAGS += -DAUTO_CSMA_EN=1
 
 # Uncomment the following 2 lines to specify static link lokal IPv6 address
 # this might be useful for testing, in cases where you cannot or do not want to

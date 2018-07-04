@@ -133,6 +133,15 @@ static void *_openthread_event_thread(void *arg) {
                 DEBUG("\not_event: OPENTHREAD_NETDEV_MSG_TYPE_EVENT received\n");
                 /* Wait until the task thread finishes accessing the shared resoure (radio) */
                 openthread_get_netdev()->driver->isr(openthread_get_netdev());
+#ifdef MODULE_OPENTHREAD_FTD
+                unsigned state = irq_disable();
+                ((at86rf2xx_t *)openthread_get_netdev())->pending_irq--;
+                irq_restore(state);
+#endif
+                break;
+            case OPENTHREAD_LINK_RETRY_TIMEOUT:
+                DEBUG("\not_event: OPENTHREAD_LINK_RETRY_TIMEOUT\n");
+                sent_pkt(openthread_get_instance(), NETDEV_EVENT_TX_NOACK);
                 break;
             case OPENTHREAD_NETDEV_MSG_TYPE_RADIO_BUSY:
                 /* Radio is busy */
@@ -156,13 +165,15 @@ static void *_openthread_event_thread(void *arg) {
             case OPENTHREAD_SERIAL_MSG_TYPE_EVENT:
                 /* Tell OpenThread about the reception of a CLI command */
                 DEBUG("\not_event: OPENTHREAD_SERIAL_MSG_TYPE received\n");
+                //printf("RX serial\n");
                 serialBuffer = (serial_msg_t*)msg.content.ptr;
                 DEBUG("%s", serialBuffer->buf);
+                printf("Rx->");
                 otPlatUartReceived((uint8_t*) serialBuffer->buf,serialBuffer->length);
                 serialBuffer->serial_buffer_status = OPENTHREAD_SERIAL_BUFFER_STATUS_FREE;
                 break;
             case OPENTHREAD_JOB_MSG_TYPE_EVENT:
-                DEBUG("\not_event: OPENTHREAD_JOB_MSG_TYPE_EVENT receimake deved\n");
+                DEBUG("\not_event: OPENTHREAD_JOB_MSG_TYPE_EVENT received\n");
                 job = msg.content.ptr;
                 reply.content.value = ot_exec_command(sInstance, job->command, job->arg, job->answer);
                 msg_reply(&msg, &reply);

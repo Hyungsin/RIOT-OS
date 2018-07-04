@@ -183,15 +183,8 @@ static void _event_cb(netdev_t *dev, netdev_event_t event) {
                 break;
             }
         case NETDEV_EVENT_RX_COMPLETE:
-            {
-#ifdef MODULE_OPENTHREAD_FTD
-                unsigned state = irq_disable();
-                ((at86rf2xx_t *)openthread_get_netdev())->pending_irq--;
-                irq_restore(state);
-#endif
-                recv_pkt(openthread_get_instance(), dev);
-                break;
-            }
+            recv_pkt(openthread_get_instance(), dev);
+            break;
         case NETDEV_EVENT_TX_COMPLETE:
         case NETDEV_EVENT_TX_COMPLETE_DATA_PENDING:
         case NETDEV_EVENT_TX_NOACK:

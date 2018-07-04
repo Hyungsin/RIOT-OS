@@ -85,6 +85,7 @@ static void uart_handler(void* arg, char c)  {
             msg_t msg;
             msg.type = OPENTHREAD_SERIAL_MSG_TYPE_EVENT;
             msg.content.ptr = &gSerialMessage[currentSerialBufferNumber];
+            printf("I->");
             msg_send_int(&msg, openthread_get_event_pid());
         }
         else {
@@ -168,6 +169,7 @@ otError otPlatUartDisable(void)
 otError otPlatUartSend(const uint8_t *aBuf, uint16_t aBufLength)
 {
 #ifdef UART_NUMOF
+    //printf("TX serial\n");
     uart_write(OPENTHREAD_UART_DEV, aBuf, aBufLength);
 
     /* Tell OpenThread the sending of UART is done */
