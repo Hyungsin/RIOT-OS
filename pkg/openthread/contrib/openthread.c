@@ -166,8 +166,8 @@ static void _event_cb(netdev_t *dev, netdev_event_t event) {
                 ((at86rf2xx_t *)dev)->pending_irq++;
                 irq_restore(irq_state);
 #endif
-                if (msg_send(&radio_rx_msg, openthread_get_event_pid()) <= 0) {
-                    printf("ot_event: possibly lost radio interrupt.\n");
+                if (msg_send(&radio_rx_msg, openthread_get_main_pid()) <= 0) {
+                    printf("ot_main: possibly lost radio interrupt.\n");
 #ifdef MODULE_OPENTHREAD_FTD
                     unsigned irq_state = irq_disable();
                     ((at86rf2xx_t *)dev)->pending_irq--;
@@ -210,7 +210,7 @@ uint8_t ot_call_command(char* command, void *arg, void* answer) {
     msg_t msg, reply;
     msg.type = OPENTHREAD_JOB_MSG_TYPE_EVENT;
     msg.content.ptr = &job;
-    msg_send_receive(&msg, &reply, openthread_get_event_pid());
+    msg_send_receive(&msg, &reply, openthread_get_main_pid());
     return (uint8_t)reply.content.value;
 }
 
