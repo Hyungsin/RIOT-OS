@@ -301,7 +301,7 @@ otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aPacket)
             _set_idle();
         }
         msg.type = OPENTHREAD_NETDEV_MSG_TYPE_RADIO_BUSY;
-        msg_send(&msg, openthread_get_event_pid());
+        msg_send(&msg, openthread_get_main_pid());
     }
 
     return OT_ERROR_NONE;

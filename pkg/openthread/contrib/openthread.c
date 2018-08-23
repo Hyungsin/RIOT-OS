@@ -55,7 +55,6 @@ static msg_t radio_tx_msg;
 static mutex_t buffer_mutex = MUTEX_INIT;
 
 static char ot_main_thread_stack[THREAD_STACKSIZE_MAIN*2];
-static char ot_event_thread_stack[THREAD_STACKSIZE_MAIN];
 
 void print_active_pid(void) {
     unsigned int pid = sched_active_pid;
@@ -118,7 +117,7 @@ xtimer_t* openthread_get_linkretry_timer(void) {
 /* Interupt handler for OpenThread linkretry-timer event */
 static void _linkretry_timer_cb(void* arg) {
     linkretry_timer_msg.type = OPENTHREAD_LINK_RETRY_TIMEOUT;
-	if (msg_send(&linkretry_timer_msg, openthread_get_event_pid()) <= 0) {
+	if (msg_send(&linkretry_timer_msg, openthread_get_main_pid()) <= 0) {
         while (1) {
             printf("ot_event: possibly lost timer interrupt.\n");
         }
@@ -129,7 +128,7 @@ static void _linkretry_timer_cb(void* arg) {
 /* Interupt handler for OpenThread milli-timer event */
 static void _millitimer_cb(void* arg) {
     millitimer_msg.type = OPENTHREAD_MILLITIMER_MSG_TYPE_EVENT;
-	if (msg_send(&millitimer_msg, openthread_get_event_pid()) <= 0) {
+	if (msg_send(&millitimer_msg, openthread_get_main_pid()) <= 0) {
         while (1) {
             printf("ot_event: possibly lost timer interrupt.\n");
         }
@@ -145,7 +144,7 @@ xtimer_t* openthread_get_microtimer(void) {
 /* Interupt handler for OpenThread micro-timer event */
 static void _microtimer_cb(void* arg) {
    	microtimer_msg.type = OPENTHREAD_MICROTIMER_MSG_TYPE_EVENT;
-	if (msg_send(&microtimer_msg, openthread_get_event_pid()) <= 0) {
+	if (msg_send(&microtimer_msg, openthread_get_main_pid()) <= 0) {
         while(1) {
             printf("ot_event: possibly lost timer interrupt.\n");
         }
@@ -181,7 +180,7 @@ static void _event_cb(netdev_t *dev, netdev_event_t event) {
                 radio_tx_msg.type = OPENTHREAD_NETDEV_MSG_TYPE_EVENT;
                 radio_tx_msg.content.ptr = dev;
                 radio_tx_msg.content.value = 0;
-                if (msg_send(&radio_tx_msg, openthread_get_event_pid()) <= 0) {
+                if (msg_send(&radio_tx_msg, openthread_get_main_pid()) <= 0) {
                     printf("ot_event: possibly lost radio interrupt.\n");
                 }
                 break;
@@ -247,8 +246,6 @@ void openthread_bootstrap(void)
     DEBUG("OT-UART setting is OK\n");
 
     /* init three threads for openthread */
-    openthread_event_init(ot_event_thread_stack, sizeof(ot_event_thread_stack),
-                         THREAD_PRIORITY_MAIN - 2, "openthread_event");
     openthread_main_init(ot_main_thread_stack, sizeof(ot_main_thread_stack),
                          THREAD_PRIORITY_MAIN - 1, "openthread_main");
 }

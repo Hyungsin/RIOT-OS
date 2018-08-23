@@ -88,7 +88,7 @@ static void uart_handler(void* arg, char c)  {
             msg_t msg;
             msg.type = OPENTHREAD_SERIAL_MSG_TYPE_EVENT;
             msg.content.ptr = &gSerialMessage[currentSerialBufferNumber];
-            if (msg_send_int(&msg, openthread_get_event_pid()) <= 0) {
+            if (msg_send_int(&msg, openthread_get_main_pid()) <= 0) {
                 /* Msg is not passed */
                 gSerialMessage[currentSerialBufferNumber].serial_buffer_status =
                 OPENTHREAD_SERIAL_BUFFER_STATUS_FREE;
@@ -140,7 +140,7 @@ static void uart_handler(void* arg, char c) {
                 msg_t msg;
                 msg.type = OPENTHREAD_SERIAL_MSG_TYPE_EVENT;
                 msg.content.ptr = &gSerialMessage[0];
-                msg_send_int(&msg, openthread_get_event_pid());
+                msg_send_int(&msg, openthread_get_main_pid());
                 frameLength = 0;
             }
             break;
