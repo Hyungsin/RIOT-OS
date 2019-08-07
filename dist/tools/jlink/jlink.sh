@@ -58,6 +58,10 @@ _JLINK_SERVER=JLinkGDBServer
 _JLINK_IF=SWD
 _JLINK_SPEED=2000
 
+# default terminal frontend
+_JLINK_TERMPROG=${RIOTBASE}/dist/tools/pyterm/pyterm
+_JLINK_TERMFLAGS="-ts 19021"
+
 #
 # a couple of tests for certain configuration options
 #
@@ -128,6 +132,12 @@ test_serial() {
     fi
 }
 
+test_dbg() {
+    if [ -z "${DBG}" ]; then
+        DBG="${GDB}"
+    fi
+}
+
 #
 # now comes the actual actions
 #
@@ -156,11 +166,13 @@ do_flash() {
 }
 
 do_debug() {
+    ELFFILE=$1
     test_config
     test_serial
     test_elffile
     test_ports
     test_tui
+    test_dbg
     # start the JLink GDB server
     sh -c "${JLINK_SERVER} ${JLINK_SERIAL_SERVER} \
                            -device '${JLINK_DEVICE}' \
@@ -175,6 +187,27 @@ do_debug() {
     # clean up
     kill ${DBG_PID}
 }
+
+#do_debug() {
+#    test_config
+#    test_serial
+#    test_elffile
+#    test_ports
+#    test_tui
+    # start the JLink GDB server
+#    sh -c "${JLINK_SERVER} ${JLINK_SERIAL_SERVER} \
+#                           -device '${JLINK_DEVICE}' \
+#                           -speed '${JLINK_SPEED}' \
+#                           -if '${JLINK_IF}' \
+#                           -port '${GDB_PORT}' \
+#                           -telnetport '${TELNET_PORT}'" &
+    # save PID for terminating the server afterwards
+#    DBG_PID=$?
+    # connect to the GDB server
+#    ${DBG} -q ${TUI} -ex "tar ext :${GDB_PORT}" ${ELFFILE}
+    # clean up
+#    kill ${DBG_PID}
+#}
 
 do_debugserver() {
     test_ports
@@ -201,6 +234,48 @@ do_reset() {
                     -commandfile '${RIOTBASE}/dist/tools/jlink/reset.seg'"
 }
 
+test_term() {
+    if [ -z "${JLINK_TERMPROG}" ]; then
+        JLINK_TERMPROG="${_JLINK_TERMPROG}"
+    fi
+    if [ -z "${JLINK_TERMFLAGS}" ]; then
+        JLINK_TERMFLAGS="${_JLINK_TERMFLAGS}"
+    fi
+}
+
+do_term() {
+    test_config
+    test_serial
+    test_term
+
+    # temporary file that save the JLink pid
+    JLINK_PIDFILE=$(mktemp -t "jilnk_pid.XXXXXXXXXX")
+    # will be called by trap
+    cleanup() {
+        if [ -f $JLINK_PIDFILE ]; then
+            JLINK_PID="$(cat ${JLINK_PIDFILE})"
+            kill ${JLINK_PID}
+            rm -r "${JLINK_PIDFILE}"
+        fi
+        exit 0
+    }
+    # cleanup after script terminates
+    trap "cleanup ${JLINK_PIDFILE}" EXIT INT
+
+    # start Jlink as RTT server
+    sh -c "${JLINK} ${JLINK_SERIAL} \
+            -ExitOnError 1 \
+            -device '${JLINK_DEVICE}' \
+            -speed '${JLINK_SPEED}' \
+            -if '${JLINK_IF}' \
+            -jtagconf -1,-1 \
+            -commandfile '${RIOTTOOLS}/jlink/term.seg' >/dev/null & \
+            echo  \$! > $JLINK_PIDFILE" &
+    sleep 1
+
+    sh -c "${JLINK_TERMPROG} ${JLINK_TERMFLAGS}"
+}
+
 #
 # parameter dispatching
 #
@@ -224,6 +299,10 @@ case "${ACTION}" in
   reset)
     echo "### Resetting Target ###"
     do_reset "$@"
+    ;;
+  term_rtt)
+    echo "### Starting RTT terminal ###"
+    do_term
     ;;
   *)
     echo "Usage: $0 {flash|debug|debug-server|reset}"

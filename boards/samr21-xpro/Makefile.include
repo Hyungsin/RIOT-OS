@@ -13,8 +13,14 @@ ifeq ($(PROGRAMMER),edbg)
 
   include $(RIOTMAKE)/boards/sam0.inc.mk
 else ifeq ($(PROGRAMMER),jlink)
-  export DEBUGGER = $(RIOTBOARD)/$(BOARD)/dist/debug.sh
-  export DEBUGSERVER = JLinkGDBServer -device atsamr21e18a -if swd
+  export JLINK_DEVICE := atsamr21e18a
+  #export DEBUGGER = $(RIOTBOARD)/$(BOARD)/dist/debug.sh
+  #export DEBUGSERVER = JLinkGDBServer -device atsamr21e18a -if swd
+  export DEBUGGER = $(RIOTBASE)/dist/tools/jlink/jlink.sh
+  export DEBUGSERVER = $(RIOTBASE)/dist/tools/jlink/jlink.sh
+  export DEBUGGER_FLAGS = debug $(ELFFILE)
+  export DEBUGSERVER_FLAGS = debug-server
+
   export RESET = $(RIOTBOARD)/$(BOARD)/dist/reset.sh
 
   export FLASHER = $(RIOTBOARD)/$(BOARD)/dist/flash.sh
@@ -22,11 +28,13 @@ else ifeq ($(PROGRAMMER),jlink)
 
   export OFLAGS    = -O binary --gap-fill 0xff
   export HEXFILE = $(ELFFILE:.elf=.bin)
-  export DEBUGGER_FLAGS = $(BINDIR) $(ELFFILE)
+  #export DEBUGGER_FLAGS = $(BINDIR) $(ELFFILE)
   export RESET_FLAGS = $(BINDIR)
 
+  USEMODULE += rtt_stdio
   ifneq (,$(filter rtt_stdio,$(USEMODULE)))
-    export TERMPROG = JLinkRTTClient
+    export TERMPROG = JLinkRTTClient#$(RIOTTOOLS)/jlink/jlink.sh
+    #export TERMFLAGS = term_rtt
   endif
 
   export OBJDUMPFLAGS += --disassemble --source --disassembler-options=force-thumb

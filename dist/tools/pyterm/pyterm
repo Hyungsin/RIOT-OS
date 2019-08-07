@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2014  Oliver Hahm <oliver.hahm@inria.fr>
@@ -24,9 +24,30 @@ try:
 except ImportError:
     import ConfigParser as configparser
 
+import cmd
+import serial
+import socket
+import sys
+import threading
+import readline
+import time
+import logging
+import os
+import argparse
+import re
+import codecs
+import platform
 
-import cmd, serial, socket, sys, threading, readline, time, logging, \
-    os, argparse, re, codecs, signal
+try:
+    serial.Serial
+except AttributeError:
+    print("\033[1;37;41m\n")
+    print("Something went terribly wrong when loading the pyserial package.")
+    print("There is a good chance that you installed the 'serial' package instead")
+    print("of 'pyserial'. Try running 'pip uninstall serial && pip install pyserial'")
+    print("\033[0m")
+    sys.exit(1)
+
 
 # import twisted if available, define dummy classes otherwise
 try:
@@ -34,9 +55,9 @@ try:
     from twisted.internet.protocol import Protocol, \
         ReconnectingClientFactory
 except ImportError:
-    logging.getLogger("").warn("Twisted not available, please install "
-                               "it if you want to use pyterm's JSON "
-                               "capabilities")
+    logging.getLogger("").warning("Twisted not available, please install "
+                                  "it if you want to use pyterm's JSON "
+                                  "capabilities")
 
     class Protocol():
         def __init__(self):
@@ -47,23 +68,22 @@ except ImportError:
             pass
 
 # set some default options
-import platform
 defaulthostname = platform.node()
 
 # default serial port
-defaultport    = "/dev/ttyUSB0"
+defaultport = "/dev/ttyUSB0"
 
 # default baudrate for serial connection
-defaultbaud     = 115200
+defaultbaud = 115200
 
 # directory to store configuration and log files
-defaultdir      = os.environ['HOME'] + os.path.sep + '.pyterm'
+defaultdir = os.environ['HOME'] + os.path.sep + '.pyterm'
 
 # configuration file name
-defaultfile     = "pyterm-" + defaulthostname + ".conf"
+defaultfile = "pyterm-" + defaulthostname + ".conf"
 
 # logging subfolder
-defaultrunname  = "default-run"
+defaultrunname = "default-run"
 
 # default logging prefix format string
 default_fmt_str = '%(asctime)s - %(levelname)s # %(message)s'
@@ -72,12 +92,11 @@ default_fmt_str = '%(asctime)s - %(levelname)s # %(message)s'
 defaultnewline = "LF"
 
 # default prompt character
-defaultprompt  = '>'
+defaultprompt = '>'
 
 
 class SerCmd(cmd.Cmd):
     """Main class for pyterm based on Python's Cmd class.
-
     Runs an interactive terminal that transfer between stdio and serial
     port.
     """
@@ -85,9 +104,8 @@ class SerCmd(cmd.Cmd):
     def __init__(self, port=None, baudrate=None, toggle=None, tcp_serial=None,
                  confdir=None, conffile=None, host=None, run_name=None,
                  log_dir_name=None, newline=None, formatter=None,
-                 serprompt=None):
+                 set_rts=None, set_dtr=None, serprompt=None):
         """Constructor.
-
         Args:
             port (str):         serial port
             baudrate (int):     serial baudrate
@@ -96,7 +114,6 @@ class SerCmd(cmd.Cmd):
             conffile (str):     configuration file name
             host (str):         local host name
             run_name (str):     identifier for log files subdirectory
-
         """
 
         # initialize class members
@@ -104,6 +121,8 @@ class SerCmd(cmd.Cmd):
         self.port = port
         self.baudrate = baudrate
         self.toggle = toggle
+        self.set_rts = set_rts
+        self.set_dtr = set_dtr
         self.tcp_serial = tcp_serial
         self.configdir = confdir
         self.configfile = conffile
@@ -112,7 +131,7 @@ class SerCmd(cmd.Cmd):
         self.log_dir_name = log_dir_name
         self.newline = newline
         self.serprompt = serprompt
-        if not formatter is None:
+        if formatter is not None:
             self.fmt_str = formatter
 
         if not self.host:
@@ -184,8 +203,8 @@ class SerCmd(cmd.Cmd):
                 host = self.tcp_serial.split(':')[0]
                 port = self.tcp_serial.split(':')[1]
             else:
-                self.logger.warn("Host name for TCP connection is "
-                                 "missing, defaulting to \"localhost\"")
+                self.logger.warning("Host name for TCP connection is "
+                                    "missing, defaulting to \"localhost\"")
                 host = "localhost"
                 port = self.tcp_serial
             self.logger.info("Connect to %s:%s"
@@ -225,13 +244,16 @@ class SerCmd(cmd.Cmd):
                 self.logger.error("Cannot connect to serial port {}: {}"
                                   .format(self.port, e.strerror))
                 sys.exit(1)
+            except serial.SerialException as e:
+                self.logger.error("%s", e.strerror)
+                sys.exit(1)
 
         # wait until connection is established and fire startup
         # commands to the node
         time.sleep(1)
-        for cmd in self.init_cmd:
-            self.logger.debug("WRITE ----->>>>>> '" + cmd + "'\n")
-            self.onecmd(self.precmd(cmd))
+        for command in self.init_cmd:
+            self.logger.debug("WRITE ----->>>>>> '" + command + "'\n")
+            self.onecmd(self.precmd(command))
 
         # start serial->console thread
         receiver_thread = threading.Thread(target=self.reader)
@@ -265,6 +287,12 @@ class SerCmd(cmd.Cmd):
         node.
         """
         self.ser.write("help\n".encode("utf-8"))
+
+    def do_EOF(self, line):
+        """Handle EOF (Ctrl+D) nicely."""
+        self.logger.debug("Received EOF")
+        self.do_PYTERM_exit("")
+        sys.exit(0)
 
     def complete_date(self, text, line, begidx, endidm):
         """Auto completion for date string.
@@ -467,10 +495,10 @@ class SerCmd(cmd.Cmd):
     def load_config(self):
         """Internal function to laod configuration from file.
         """
-        self.config = configparser.SafeConfigParser()
+        self.config = configparser.ConfigParser()
         cf = os.path.join(self.configdir, self.configfile)
         self.config.read(cf)
-        logging.getLogger("").info("Reading file: %s" %  cf)
+        logging.getLogger("").info("Reading file: %s" % cf)
 
         for sec in self.config.sections():
             if sec == "filters":
@@ -503,7 +531,6 @@ class SerCmd(cmd.Cmd):
 
     def timer_handler(self, line):
         """Handles a scheduled timer event.
-
         Args:
             line (str): the command line to be executed, when the timer
                         fires.
@@ -514,7 +541,6 @@ class SerCmd(cmd.Cmd):
     def process_line(self, line):
         """Processes a valid line from node that should be printed and
         possibly forwarded.
-
         Args:
             line (str): input from node.
         """
@@ -557,7 +583,6 @@ class SerCmd(cmd.Cmd):
     def handle_line(self, line):
         """Handle line from node and check for further processing
         requirements.
-
         Args:
             line (str): input line from node.
         """
@@ -582,9 +607,16 @@ class SerCmd(cmd.Cmd):
     def serial_connect(self):
         self.ser = serial.Serial(port=self.port, dsrdtr=0, rtscts=0)
         self.ser.baudrate = self.baudrate
+
         if self.toggle:
             self.ser.setDTR(0)
             self.ser.setRTS(0)
+
+        if self.set_rts == 1 or self.set_rts == 0:
+            self.ser.setRTS(self.set_rts)
+
+        if self.set_dtr == 1 or self.set_dtr == 0:
+            self.ser.setDTR(self.set_dtr)
 
     def reader(self):
         """Serial or TCP reader.
@@ -599,18 +631,18 @@ class SerCmd(cmd.Cmd):
                                                errors='replace')
                 c = sr.read(1)
             # try to re-open it with a timeout of 1s otherwise
-            except (serial.SerialException, ValueError) as se:
-                self.logger.warn("Serial port disconnected, waiting to "
-                                 "get reconnected...")
+            except (serial.SerialException, ValueError):
+                self.logger.warning("Serial port disconnected, waiting to "
+                                    "get reconnected...")
                 self.ser.close()
                 time.sleep(1)
                 if os.path.exists(self.port):
-                    self.logger.warn("Try to reconnect to %s again..."
-                                     % (self.port))
+                    self.logger.warning("Try to reconnect to %s again..."
+                                        % (self.port))
                     try:
                         self.serial_connect()
                         self.logger.info("Reconnected to serial port %s" % self.port)
-                    except serial.SerialException as se:
+                    except serial.SerialException:
                         pass
                 continue
             if c == '\r':
@@ -675,10 +707,6 @@ class PytermClientFactory(ReconnectingClientFactory):
                                                          reason)
 
 
-def __stop_reactor(signum, stackframe):
-    sys.stderr.write("Ctrl-C is disabled, type '/exit' instead\n")
-
-
 class fdsocket(socket.socket):
     def read(self, bufsize):
         return self.recv(bufsize)
@@ -687,10 +715,11 @@ class fdsocket(socket.socket):
         try:
             return self.sendall(string)
         except socket.error as e:
-            logging.getLogger("").warn("Error in TCP connection (%s), "
-                                       "closing down" % str(e))
+            logging.getLogger("").warning("Error in TCP connection (%s), "
+                                          "closing down" % str(e))
             self.close()
             sys.exit(0)
+
 
 if __name__ == "__main__":
 
@@ -712,6 +741,18 @@ if __name__ == "__main__":
                         action="store_true",
                         help="toggles the DTR and RTS pin of the serial line "
                         "when connecting, default is not toggling the pins")
+    parser.add_argument("-sr", "--set-rts",
+                        dest="set_rts",
+                        type=int,
+                        action="store",
+                        default=None,
+                        help="Specifies the value of RTS pin")
+    parser.add_argument("-sd", "--set-dtr",
+                        dest="set_dtr",
+                        type=int,
+                        action="store",
+                        default=None,
+                        help="Specifies the value of DTR pin")
     parser.add_argument('-d', '--directory',
                         help="Specify the Pyterm directory, default is %s"
                         % defaultdir,
@@ -751,20 +792,23 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if (args.noprefix):
+    if args.noprefix:
         args.format = ""
     myshell = SerCmd(args.port, args.baudrate, args.toggle, args.tcp_serial,
                      args.directory, args.config, args.host, args.run_name,
-                     args.log_dir_name, args.newline, args.format, args.prompt)
+                     args.log_dir_name, args.newline, args.format,
+                     args.set_rts, args.set_dtr, args.prompt)
     myshell.prompt = ''
 
-    if args.server and args.tcp_port:
-        myfactory = PytermClientFactory(myshell)
-        reactor.connectTCP(args.server, args.tcp_port, myfactory)
-        myshell.factory = myfactory
-        reactor.callInThread(myshell.cmdloop, "Welcome to pyterm!\n"
-                                              "Type '/exit' to exit.")
-        signal.signal(signal.SIGINT, __stop_reactor)
-        reactor.run()
-    else:
-        myshell.cmdloop("Welcome to pyterm!\nType '/exit' to exit.")
+    try:
+        if args.server and args.tcp_port:
+            myfactory = PytermClientFactory(myshell)
+            reactor.connectTCP(args.server, args.tcp_port, myfactory)
+            myshell.factory = myfactory
+            reactor.callInThread(myshell.cmdloop, "Welcome to pyterm!\n"
+                                                  "Type '/exit' to exit.")
+            reactor.run()
+        else:
+            myshell.cmdloop("Welcome to pyterm!\nType '/exit' to exit.")
+    except KeyboardInterrupt:
+        myshell.do_PYTERM_exit(None)
