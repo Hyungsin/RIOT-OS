@@ -47,6 +47,30 @@ static char _stack[GNRC_UDP_STACK_SIZE + THREAD_EXTRA_STACKSIZE_PRINTF];
 static char _stack[GNRC_UDP_STACK_SIZE];
 #endif
 
+static uint32_t recv_cnt = 0;
+
+typedef struct __attribute__((packed,aligned(4))) {
+  uint32_t seqNum;
+  uint16_t sender;
+  uint16_t serial;
+  uint16_t flags; //which of the fields below exist
+  int16_t  acc_x;
+  int16_t  acc_y;
+  int16_t  acc_z;
+  int16_t  mag_x;
+  int16_t  mag_y;
+  int16_t  mag_z;
+  int16_t  radtemp;
+  int16_t  temp;
+  int16_t  hum;
+  int16_t  light_lux;
+  uint16_t buttons;
+  uint16_t occup;
+  uint32_t reserved1;
+  uint32_t reserved2;
+  uint32_t reserved3;
+} ham7c_t;
+
 /**
  * @brief   Calculate the UDP checksum dependent on the network protocol
  *
@@ -100,7 +124,8 @@ static uint16_t _calc_csum(gnrc_pktsnip_t *hdr, gnrc_pktsnip_t *pseudo_hdr,
 
 static void _receive(gnrc_pktsnip_t *pkt)
 {
-    gnrc_pktsnip_t *udp, *ipv6;
+    gnrc_pktsnip_t *udp, *ipv6, *app;
+    ham7c_t* app_payload;
     udp_hdr_t *hdr;
     uint32_t port;
 
@@ -153,6 +178,14 @@ static void _receive(gnrc_pktsnip_t *pkt)
 
     /* get port (netreg demux context) */
     port = (uint32_t)byteorder_ntohs(hdr->dst_port);
+
+    app = gnrc_pktbuf_start_write(pkt);
+    app_payload = (ham7c_t *)app->data;
+
+    /* packet count for link measurement */
+    recv_cnt++;
+    printf("Rx %lu Tx %lu Sender %u Receiver %u\n", recv_cnt, app_payload->seqNum, app_payload->sender, HOSTNAME);
+
 
     /* send payload to receivers */
     if (!gnrc_netapi_dispatch_receive(GNRC_NETTYPE_UDP, port, pkt)) {
@@ -231,6 +264,8 @@ static void *_event_loop(void *arg)
     msg_init_queue(msg_queue, GNRC_UDP_MSG_QUEUE_SIZE);
     /* register UPD at netreg */
     gnrc_netreg_register(GNRC_NETTYPE_UDP, &netreg);
+
+    printf("START UDP\n");
 
     /* dispatch NETAPI messages */
     while (1) {

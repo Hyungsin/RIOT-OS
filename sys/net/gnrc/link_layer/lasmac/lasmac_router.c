@@ -160,7 +160,6 @@ void msg_queue_remove(msg_t* msg_queue) {
 			xtimer_set(&timer, DUTYCYCLE_SLEEP_INTERVAL+100);
 			broadcasting = true;
 			sending_pkt_key = 0;
-			printf("broadcast starts\n");
 			return;
 		}
 	}
@@ -230,7 +229,6 @@ void broadcast_cb(void* arg) {
 	/* Broadcasting msg maintenance for routers */
 	broadcasting = false;
 	broadcasting_num--;
-	printf("braodcast ends\n");
 	msg.type = GNRC_NETDEV_DUTYCYCLE_MSG_TYPE_REMOVE_QUEUE;
 	msg_send(&msg, gnrc_lasmac_netdev->pid);
 }
@@ -424,7 +422,7 @@ static void *_gnrc_lasmac_thread(void *args)
 				break;
 			case GNRC_NETDEV_DUTYCYCLE_MSG_TYPE_REMOVE_QUEUE:
 				/* Remove a packet from the packet queue */
-				msg_queue_remove(pkt_queue);	
+				msg_queue_remove(pkt_queue);
 				/* Send a packet in the packet queue */
 				/* */
 				if (pending_num && !radio_busy && recent_dst_l2addr != 0xffff) {
@@ -441,7 +439,7 @@ static void *_gnrc_lasmac_thread(void *args)
                 break;
             case GNRC_NETAPI_MSG_TYPE_SND:
                 DEBUG("gnrc_netdev: GNRC_NETAPI_MSG_TYPE_SND received\n");
-				/* ToDo: We need to distingush sending operation according to the destination 
+				/* ToDo: We need to distingush sending operation according to the destination
 						characteristisc: duty-cycling or always-on */
 				/* Queue a packet */
 				if (msg_queue_add(pkt_queue, &msg)) {

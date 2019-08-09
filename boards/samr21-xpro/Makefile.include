@@ -33,8 +33,8 @@ else ifeq ($(PROGRAMMER),jlink)
 
   USEMODULE += rtt_stdio
   ifneq (,$(filter rtt_stdio,$(USEMODULE)))
-    export TERMPROG = JLinkRTTClient#$(RIOTTOOLS)/jlink/jlink.sh
-    #export TERMFLAGS = term_rtt
+    export TERMPROG = $(RIOTTOOLS)/jlink/jlink.sh #JLinkRTTClient
+    export TERMFLAGS = term_rtt
   endif
 
   export OBJDUMPFLAGS += --disassemble --source --disassembler-options=force-thumb
